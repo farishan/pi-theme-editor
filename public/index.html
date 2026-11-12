@@ -71,6 +71,9 @@
       <h2>Preview (approx)</h2>
       <div id="piPreview" class="pi-preview"></div>
       <div id="preview" class="swatches" style="margin-top:.5rem"></div>
+      <div class="row" style="margin-top:.5rem">
+        <button id="shuffleBtn" class="secondary">Shuffle</button>
+      </div>
     </div>
   </section>
   <section>
@@ -498,7 +501,124 @@ $('saveBtn').onclick = async () => {
   } catch(e){ $('msg').textContent = e.message; $('msg').className='status err'; }
 };
 
-loadList().then(() => { if(themes.includes('dark')) loadTheme('dark'); else if(themes.length) loadTheme(themes[0]); });
+function rand(min, max){ return min + Math.random() * (max - min); }
+function okhsl(h, s, l){ return `okhsl(${Math.round(h)} ${Math.round(s*100)}% ${Math.round(l*100)}%)`; }
+function generateShuffledTheme(){
+  const appearance = ($('appearanceSelect').value || 'dark');
+  const dark = appearance === 'dark';
+  const baseHue = rand(0, 360);
+  const accentHue = baseHue;
+  const successHue = (baseHue + 120) % 360;
+  const warningHue = (baseHue + 60) % 360;
+  const errorHue = (baseHue + 330) % 360;
+  const infoHue = (baseHue + 210) % 360;
+
+  const L = dark
+    ? { page:rand(.12,.17), card:rand(.18,.24), text:rand(.88,.94), muted:rand(.62,.70), border:rand(.46,.54), borderMuted:rand(.36,.44), accent:rand(.64,.72), success:rand(.64,.72), error:rand(.64,.72), warning:rand(.70,.76), dim:rand(.56,.64), thinking:rand(.62,.70), selectedBg:rand(.22,.28), scrollTrack:rand(.20,.26), scrollThumb:rand(.52,.60), searchBg:rand(.22,.28), toolPending:rand(.20,.26), toolSuccess:rand(.22,.28), toolError:rand(.22,.28), mdCodeBlock:rand(.20,.26), customMsg:rand(.22,.28) }
+    : { page:rand(.94,.98), card:rand(.88,.94), text:rand(.14,.22), muted:rand(.40,.50), border:rand(.68,.76), borderMuted:rand(.78,.86), accent:rand(.38,.46), success:rand(.38,.46), error:rand(.38,.46), warning:rand(.36,.44), dim:rand(.50,.60), thinking:rand(.40,.50), selectedBg:rand(.84,.90), scrollTrack:rand(.84,.90), scrollThumb:rand(.68,.76), searchBg:rand(.86,.92), toolPending:rand(.86,.92), toolSuccess:rand(.86,.92), toolError:rand(.86,.92), mdCodeBlock:rand(.86,.92), customMsg:rand(.86,.92) };
+  const S = dark
+    ? { page:rand(.08,.16), card:rand(.08,.16), text:rand(.02,.05), muted:rand(.04,.08), border:rand(.06,.10), accent:rand(.45,.60), success:rand(.45,.60), error:rand(.50,.65), warning:rand(.60,.75) }
+    : { page:rand(.04,.08), card:rand(.04,.08), text:rand(.03,.06), muted:rand(.06,.10), border:rand(.06,.10), accent:rand(.45,.60), success:rand(.45,.60), error:rand(.50,.65), warning:rand(.60,.75) };
+
+  const vars = {
+    text: okhsl(baseHue, S.text, L.text),
+    muted: okhsl(baseHue, S.muted, L.muted),
+    accent: okhsl(accentHue, S.accent, L.accent),
+    blue: okhsl(infoHue, S.accent, L.accent),
+    green: okhsl(successHue, S.success, L.success),
+    red: okhsl(errorHue, S.error, L.error),
+    yellow: okhsl(warningHue, S.warning, L.warning),
+    blueBg: okhsl(infoHue, S.accent*0.7, L.selectedBg),
+  };
+
+  const colors = {
+    accent: 'accent',
+    border: okhsl(baseHue, S.border, L.border),
+    borderAccent: okhsl(accentHue, S.accent, L.accent),
+    borderMuted: okhsl(baseHue, S.border, L.borderMuted),
+    success: 'green',
+    error: 'red',
+    warning: 'yellow',
+    muted: 'muted',
+    dim: okhsl(baseHue, S.border, L.dim),
+    text: 'text',
+    thinkingText: okhsl(baseHue, S.muted, L.thinking),
+    selectedBg: 'blueBg',
+    scrollbarTrack: okhsl(baseHue, S.border, L.scrollTrack),
+    scrollbarThumb: okhsl(baseHue, S.border, L.scrollThumb),
+    searchMatchBg: okhsl(warningHue, 0.4, L.searchBg),
+    searchMatchText: 'muted',
+    userMessageBg: 'blueBg',
+    userMessageText: 'text',
+    customMessageBg: okhsl(accentHue, 0.4, L.customMsg),
+    customMessageText: 'muted',
+    customMessageLabel: 'accent',
+    toolPendingBg: okhsl(baseHue, S.page, L.toolPending),
+    toolSuccessBg: okhsl(successHue, 0.4, L.toolSuccess),
+    toolErrorBg: okhsl(errorHue, 0.45, L.toolError),
+    toolTitle: 'text',
+    toolOutput: 'muted',
+    mdHeading: 'yellow',
+    mdLink: 'blue',
+    mdLinkUrl: 'muted',
+    mdCode: 'accent',
+    mdCodeBlock: okhsl(successHue, 0.35, L.mdCodeBlock),
+    mdCodeBlockBorder: 'muted',
+    mdQuote: 'muted',
+    mdQuoteBorder: 'muted',
+    mdHr: 'muted',
+    mdListBullet: 'accent',
+    toolDiffAdded: 'green',
+    toolDiffRemoved: 'red',
+    toolDiffContext: 'muted',
+    syntaxComment: 'muted',
+    syntaxKeyword: 'blue',
+    syntaxFunction: 'yellow',
+    syntaxVariable: okhsl(infoHue, S.accent, L.accent),
+    syntaxString: okhsl(warningHue, 0.5, L.accent),
+    syntaxNumber: 'green',
+    syntaxType: 'accent',
+    syntaxOperator: 'muted',
+    syntaxPunctuation: 'muted',
+    thinkingOff: okhsl(baseHue, S.border, L.borderMuted),
+    thinkingMinimal: okhsl(baseHue, 0.2, L.muted),
+    thinkingLow: okhsl(accentHue, 0.3, L.accent),
+    thinkingMedium: okhsl(accentHue, 0.4, L.accent),
+    thinkingHigh: okhsl(accentHue, 0.5, L.accent),
+    thinkingXhigh: okhsl(accentHue, 0.6, L.accent),
+    thinkingMax: okhsl(warningHue, 0.7, L.warning),
+    bashMode: okhsl(successHue, 0.5, L.accent),
+  };
+
+  const exp = {
+    pageBg: okhsl(baseHue, S.page, L.page),
+    cardBg: okhsl(baseHue, S.card, L.card),
+    infoBg: okhsl(warningHue, 0.4, L.searchBg),
+  };
+
+  return {
+    $schema: 'https://pi.dev/schemas/theme.schema.json',
+    name: 'my-theme',
+    appearance,
+    vars,
+    colors,
+    export: exp,
+  };
+}
+
+function createShuffledDraft(){
+  const t = generateShuffledTheme();
+  current = null;
+  theme = null;
+  renderForm(t);
+  $('msg').textContent = 'shuffled draft (not saved)';
+  $('msg').className = 'status ok';
+}
+
+$('shuffleBtn').onclick = () => { createShuffledDraft(); };
+
+loadList().then(() => { createShuffledDraft(); });
+
 </script>
 </body>
 </html>
