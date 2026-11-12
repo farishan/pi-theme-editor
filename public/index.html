@@ -26,6 +26,28 @@
   .section-title { font-size:.95rem; color:#ccc; margin:.75rem 0 .25rem; }
   .scroll { max-height: 70vh; overflow:auto; padding-right:.25rem; }
   .small { font-size:.8rem; color:#888; }
+
+  .pi-preview { border:1px solid #333; border-radius:8px; overflow:hidden; font-family: ui-monospace, monospace; font-size:.82rem; }
+  .pi-preview .pp-header { padding:.5rem .75rem; border-bottom:1px solid var(--pp-borderMuted,#333); background:var(--pp-cardBg,#14181d); color:var(--pp-muted,#aaa); display:flex; justify-content:space-between; }
+  .pi-preview .pp-body { padding:.75rem; background:var(--pp-pageBg,#0b0d10); color:var(--pp-text,#e6e6e6); max-height:360px; overflow:auto; }
+  .pi-preview .pp-user { background:var(--pp-userBg,#1e293b); color:var(--pp-userText,#e6e6e6); padding:.5rem .75rem; border-radius:6px; margin:.5rem 0; border:1px solid var(--pp-borderMuted,#333); }
+  .pi-preview .pp-assistant { margin:.5rem 0; color:var(--pp-text,#e6e6e6); }
+  .pi-preview .pp-assistant h4 { color:var(--pp-mdHeading,#fbbf24); margin:.25rem 0; font-size:.9rem; }
+  .pi-preview .pp-assistant a { color:var(--pp-mdLink,#60a5fa); }
+  .pi-preview .pp-assistant code { color:var(--pp-mdCode,#c084fc); background:var(--pp-mdCodeBlock,#1f2937); padding:0 .25rem; border-radius:3px; }
+  .pi-preview .pp-assistant pre { background:var(--pp-mdCodeBlock,#1f2937); border:1px solid var(--pp-mdCodeBlockBorder,#4b5563); padding:.5rem; border-radius:6px; color:var(--pp-mdCode,#c084fc); overflow:auto; }
+  .pi-preview .pp-assistant blockquote { border-left:3px solid var(--pp-mdQuoteBorder,#4b5563); color:var(--pp-mdQuote,#aaa); padding-left:.5rem; margin:.25rem 0; }
+  .pi-preview .pp-assistant ul { margin:.25rem 0; padding-left:1.2rem; }
+  .pi-preview .pp-assistant li::marker { color:var(--pp-mdListBullet,#c084fc); }
+  .pi-preview .pp-tool { background:var(--pp-toolSuccessBg,#1f3b2f); border:1px solid var(--pp-borderMuted,#333); border-radius:6px; padding:.5rem .75rem; margin:.5rem 0; }
+  .pi-preview .pp-tool .title { color:var(--pp-toolTitle,#e6e6e6); font-weight:600; }
+  .pi-preview .pp-tool .out { color:var(--pp-toolOutput,#aaa); margin-top:.25rem; white-space:pre-wrap; }
+  .pi-preview .pp-thinking { color:var(--pp-thinkingText,#aaa); font-style:italic; margin:.5rem 0; }
+  .pi-preview .pp-diff .add { color:var(--pp-toolDiffAdded,#4ade80); }
+  .pi-preview .pp-diff .rem { color:var(--pp-toolDiffRemoved,#f87171); }
+  .pi-preview .pp-footer { padding:.5rem .75rem; border-top:1px solid var(--pp-borderMuted,#333); background:var(--pp-cardBg,#14181d); }
+  .pi-preview .pp-input { background:var(--pp-pageBg,#0b0d10); border:1px solid var(--pp-border,#4b5563); border-radius:6px; padding:.4rem .6rem; color:var(--pp-text,#e6e6e6); }
+  .pi-preview .pp-status { color:var(--pp-muted,#aaa); font-size:.75rem; margin-top:.25rem; }
 </style>
 </head>
 <body>
@@ -47,7 +69,8 @@
     </div>
     <div class="card">
       <h2>Preview (approx)</h2>
-      <div id="preview" class="swatches"></div>
+      <div id="piPreview" class="pi-preview"></div>
+      <div id="preview" class="swatches" style="margin-top:.5rem"></div>
     </div>
   </section>
   <section>
@@ -343,10 +366,91 @@ function collectTheme(){
   return t;
 }
 
-function updatePreview(){
+function ensurePiPreviewMarkup(){
+  const root=$('piPreview');
+  if(root.dataset.ready) return;
+  root.innerHTML = `
+    <div class="pp-header"><span>π  pi</span><span class="pp-theme-name">theme</span></div>
+    <div class="pp-body">
+      <div class="pp-user">explain the auth flow</div>
+      <div class="pp-assistant">
+        <h4>Assistant</h4>
+        <p>Here is a <a href="#">link</a> and <code>inline code</code>.</p>
+        <blockquote>a quoted note</blockquote>
+        <pre><code>const x = 42; // comment</code></pre>
+        <ul><li>bullet one</li><li>bullet two</li></ul>
+      </div>
+      <div class="pp-tool">
+        <div class="title">read_file src/auth.ts</div>
+        <div class="out">export function login() { ... }</div>
+        <div class="pp-diff"><span class="add">+ added line</span>  <span class="rem">- removed line</span></div>
+      </div>
+      <div class="pp-thinking">thinking (low)…</div>
+    </div>
+    <div class="pp-footer">
+      <div class="pp-input">Type a message…</div>
+      <div class="pp-status">ctrl+c to exit · 12.4k tokens</div>
+    </div>
+  `;
+  root.dataset.ready='1';
+}
+
+function resolvePreviewColors(){
   const t=collectTheme();
   const colors=t.colors||{};
   const vars=t.vars||{};
+  const exp=t.export||{};
+  const C=(token, fallback)=> toHex(colors[token], vars) || fallback;
+  const E=(token, fallback)=> toHex(exp[token], vars) || fallback;
+  return {
+    '--pp-pageBg': E('pageBg', C('toolPendingBg','#1a1a1a')),
+    '--pp-cardBg': E('cardBg', C('toolPendingBg','#14181d')),
+    '--pp-infoBg': E('infoBg', C('searchMatchBg','#1f2937')),
+    '--pp-border': C('border','#4b5563'),
+    '--pp-borderMuted': C('borderMuted','#374151'),
+    '--pp-text': C('text','#e6e6e6'),
+    '--pp-muted': C('muted','#9ca3af'),
+    '--pp-accent': C('accent','#a78bfa'),
+    '--pp-success': C('success','#4ade80'),
+    '--pp-error': C('error','#f87171'),
+    '--pp-warning': C('warning','#fbbf24'),
+    '--pp-userBg': C('userMessageBg','#1e293b'),
+    '--pp-userText': C('userMessageText','#e6e6e6'),
+    '--pp-toolPendingBg': C('toolPendingBg','#1f2937'),
+    '--pp-toolSuccessBg': C('toolSuccessBg','#1f3b2f'),
+    '--pp-toolErrorBg': C('toolErrorBg','#3b1f1f'),
+    '--pp-toolTitle': C('toolTitle','#e6e6e6'),
+    '--pp-toolOutput': C('toolOutput','#9ca3af'),
+    '--pp-mdHeading': C('mdHeading','#fbbf24'),
+    '--pp-mdLink': C('mdLink','#60a5fa'),
+    '--pp-mdCode': C('mdCode','#c084fc'),
+    '--pp-mdCodeBlock': C('mdCodeBlock','#1f2937'),
+    '--pp-mdCodeBlockBorder': C('mdCodeBlockBorder','#4b5563'),
+    '--pp-mdQuote': C('mdQuote','#9ca3af'),
+    '--pp-mdQuoteBorder': C('mdQuoteBorder','#4b5563'),
+    '--pp-mdListBullet': C('mdListBullet','#c084fc'),
+    '--pp-selectedBg': C('selectedBg','#1e293b'),
+    '--pp-thinkingText': C('thinkingText','#9ca3af'),
+    '--pp-dim': C('dim','#6b7280'),
+    '--pp-toolDiffAdded': C('toolDiffAdded','#4ade80'),
+    '--pp-toolDiffRemoved': C('toolDiffRemoved','#f87171'),
+  };
+}
+
+function updatePreview(){
+  ensurePiPreviewMarkup();
+  const t=collectTheme();
+  const colors=t.colors||{};
+  const vars=t.vars||{};
+  const root=$('piPreview');
+  const resolved=resolvePreviewColors();
+  for(const [k,v] of Object.entries(resolved)){
+    root.style.setProperty(k, v);
+  }
+  // theme name label
+  const nameEl=root.querySelector('.pp-theme-name');
+  if(nameEl) nameEl.textContent = t.name || '';
+  // swatches
   const preview=$('preview'); preview.innerHTML='';
   const keys=['accent','success','error','warning','text','muted','userMessageBg','toolSuccessBg','toolErrorBg'];
   for(const k of keys){
