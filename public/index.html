@@ -8,11 +8,10 @@
   :root { color-scheme: dark; }
   body { font-family: system-ui, sans-serif; margin: 0; background: #0b0d10; color: #e6e6e6; }
   header { padding: 1rem 1.5rem; border-bottom: 1px solid #222; display:flex; justify-content:space-between; align-items:center; }
-  main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; display:grid; grid-template-columns: 320px 1fr; gap:1rem; }
+  main { padding: 1.5rem; max-width: 1300px; margin: 0 auto; display:grid; grid-template-columns: 300px 1fr; gap:1rem; }
   .card { background: #14181d; border: 1px solid #222; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
   label { display:block; margin:.5rem 0 .25rem; font-size:.9rem; color:#aaa; }
   input, select, textarea { width:100%; box-sizing:border-box; background:#0b0d10; color:#e6e6e6; border:1px solid #333; padding:.4rem; border-radius:6px; font-family: ui-monospace, monospace; }
-  textarea { min-height: 420px; }
   button { background:#2563eb; color:#fff; border:0; padding:.45rem .9rem; border-radius:6px; cursor:pointer; }
   button.secondary { background:#333; }
   .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
@@ -22,11 +21,16 @@
   .swatches { display:grid; grid-template-columns: repeat(auto-fill,minmax(90px,1fr)); gap:.5rem; margin-top:.5rem; }
   .swatch { border:1px solid #333; border-radius:6px; padding:.4rem; font-size:.75rem; }
   .chip { display:inline-block; width:100%; height:24px; border-radius:4px; margin-bottom:.25rem; border:1px solid #444; }
+  .color-row { display:grid; grid-template-columns: 170px 1fr 42px; gap:.5rem; align-items:center; margin:.35rem 0; }
+  .var-row { display:grid; grid-template-columns: 120px 1fr 42px 34px; gap:.5rem; align-items:center; margin:.35rem 0; }
+  .section-title { font-size:.95rem; color:#ccc; margin:.75rem 0 .25rem; }
+  .scroll { max-height: 70vh; overflow:auto; padding-right:.25rem; }
+  .small { font-size:.8rem; color:#888; }
 </style>
 </head>
 <body>
 <header>
-  <div><strong>Pi Theme Editor</strong> — local web editor</div>
+  <div><strong>Pi Theme Editor</strong> — visual editor</div>
   <div id="status" class="status">connecting…</div>
 </header>
 <main>
@@ -48,20 +52,190 @@
   </section>
   <section>
     <div class="card">
-      <h2>JSON</h2>
-      <textarea id="editor" spellcheck="false"></textarea>
+      <h2>Theme</h2>
+      <label>Name</label>
+      <input id="nameInput">
+      <label>Appearance</label>
+      <select id="appearanceSelect">
+        <option value="dark">dark</option>
+        <option value="light">light</option>
+      </select>
+    </div>
+    <div class="card">
+      <h2>Vars</h2>
+      <div id="varsContainer" class="scroll"></div>
       <div class="row" style="margin-top:.5rem">
+        <button id="addVarBtn" class="secondary">Add var</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Colors</h2>
+      <div id="colorsContainer" class="scroll"></div>
+    </div>
+    <div class="card">
+      <h2>Export (HTML)</h2>
+      <div id="exportContainer"></div>
+    </div>
+    <div class="card">
+      <div class="row">
         <button id="saveBtn">Save</button>
         <span id="msg" class="status"></span>
       </div>
-      <p style="color:#888;font-size:.85rem">Saves to <code id="dir"></code>. Pi hot-reloads only the active theme; select it in Pi to preview live.</p>
+      <p class="small">Saves to <code id="dir"></code>. Pi hot-reloads only the active theme; select it in Pi to preview live.</p>
     </div>
   </section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
+const COLOR_TOKENS = ["accent","border","borderAccent","borderMuted","success","error","warning","muted","dim","text","thinkingText","scrollbarTrack","scrollbarThumb","selectedBg","searchMatchBg","searchMatchText","userMessageBg","userMessageText","customMessageBg","customMessageText","customMessageLabel","toolPendingBg","toolSuccessBg","toolErrorBg","toolTitle","toolOutput","mdHeading","mdLink","mdLinkUrl","mdCode","mdCodeBlock","mdCodeBlockBorder","mdQuote","mdQuoteBorder","mdHr","mdListBullet","toolDiffAdded","toolDiffRemoved","toolDiffContext","syntaxComment","syntaxKeyword","syntaxFunction","syntaxVariable","syntaxString","syntaxNumber","syntaxType","syntaxOperator","syntaxPunctuation","thinkingOff","thinkingMinimal","thinkingLow","thinkingMedium","thinkingHigh","thinkingXhigh","thinkingMax","bashMode"];
+const EXPORT_TOKENS = ["pageBg","cardBg","infoBg"];
 let themes = [];
 let current = null;
+let theme = null;
+
+// ---------- OKHSL conversion (from pi oklab.ts) ----------
+const LINEAR_SRGB_TO_LMS = [[0.4122214694707629,0.5363325372617349,0.0514459932675022],[0.2119034958178251,0.6806995506452344,0.1073969535369405],[0.0883024591900564,0.2817188391361215,0.6299787016738222]];
+const LMS_TO_LAB = [[0.210454268309314,0.793617774702305,-0.0040720430116193],[1.9779985324311684,-2.42859224204858,0.450593709617411],[0.0259040424655478,0.7827717124575296,-0.8086757549230774]];
+const LAB_TO_LMS = [[1,0.3963377773761749,0.2158037573099136],[1,-0.1055613458156586,-0.0638541728258133],[1,-0.0894841775298119,-1.2914855480194092]];
+const LMS_TO_LINEAR_SRGB = [[4.0767416360759583,-3.3077115392580629,0.2309699031821043],[-1.2684379732850315,2.6097573492876882,-0.341319376002657],[-0.0041960761386756,-0.7034186179359362,1.7076146940746117]];
+const SATURATION_FIT = [[[-1.8817031,-0.80936501],[1.19086277,1.76576728,0.59662641,0.75515197,0.56771245]],[[1.8144408,-1.19445267],[0.73956515,-0.45954404,0.08285427,0.12541073,-0.14503204]],[[0.13110758,1.81333971],[1.35733652,-0.00915799,-1.1513021,-0.50559606,0.00692167]]];
+const K1=0.206,K2=0.03,K3=(1+K1)/(1+K2);
+function mul(m,v){return m.map(row=>row[0]*v[0]+row[1]*v[1]+row[2]*v[2]);}
+function okhslToOklabLightness(x){return (x*x+K1*x)/(K3*(x+K2));}
+function oklabToOkhslLightness(x){return 0.5*(K3*x-K1+Math.sqrt((K3*x-K1)**2+4*K2*K3*x));}
+function srgbToLinear(v){return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;}
+function linearToSrgb(v){return v>0.0031308?1.055*v**(1/2.4)-0.055:12.92*v;}
+function oklabToLinearSrgb(lab){const lms=mul(LAB_TO_LMS,lab).map(x=>x**3);return mul(LMS_TO_LINEAR_SRGB,lms);}
+function linearSrgbToRgb(lin){const [r,g,b]=lin.map(v=>Math.round(Math.min(1,Math.max(0,linearToSrgb(v)))*255));return {r,g,b};}
+function lmsSlopes(a,b){return [LAB_TO_LMS[0],LAB_TO_LMS[1],LAB_TO_LMS[2]].map(row=>row[1]*a+row[2]*b);}
+function maxSaturation(a,b){
+  const channel = SATURATION_FIT.findIndex(([[x,y]],i)=> i===2 || x*a+y*b>1);
+  const [k0,k1,k2,k3,k4]=SATURATION_FIT[channel][1];
+  const weights=LMS_TO_LINEAR_SRGB[channel];
+  const sat=k0+k1*a+k2*b+k3*a*a+k4*a*b;
+  const slopes=lmsSlopes(a,b);
+  const base=slopes.map(k=>1+sat*k);
+  const dot=vals=>vals.reduce((s,v,i)=>s+weights[i]*v,0);
+  const f=dot(base.map(v=>v**3));
+  const f1=dot(base.map((v,i)=>3*slopes[i]*v**2));
+  const f2=dot(base.map((v,i)=>6*slopes[i]**2*v));
+  return sat-(f*f1)/(f1*f1-0.5*f*f2);
+}
+function cusp(a,b){const sat=maxSaturation(a,b);const L=Math.cbrt(1/Math.max(...oklabToLinearSrgb([1,sat*a,sat*b])));return [L,L*sat];}
+function maxChroma(a,b,L,[cuspL,cuspC]){
+  if(L<=cuspL) return (cuspC*L)/cuspL;
+  const t=(cuspC*(L-1))/(cuspL-1);
+  const slopes=lmsSlopes(a,b);
+  const lms=slopes.map(k=>L+t*k);
+  const cubes=lms.map(v=>v**3);
+  const first=lms.map((v,i)=>3*slopes[i]*v**2);
+  const second=lms.map((v,i)=>6*slopes[i]**2*v);
+  const dot=(row,vals)=>row[0]*vals[0]+row[1]*vals[1]+row[2]*vals[2];
+  const steps=LMS_TO_LINEAR_SRGB.map(row=>{
+    const f=dot(row,cubes)-1;
+    const f1=dot(row,first);
+    const f2=dot(row,second);
+    const u=f1/(f1*f1-0.5*f*f2);
+    return u>=0?-f*u:Number.MAX_VALUE;
+  });
+  return t+Math.min(...steps);
+}
+function chromaStops(L,a,b){
+  const peak=cusp(a,b);
+  const cMax=maxChroma(a,b,L,peak);
+  const k=cMax/Math.min(L*(peak[1]/peak[0]),(1-L)*(peak[1]/(1-peak[0])));
+  const midS=0.11516993+1/(7.4477897+4.1590124*b+a*(-2.19557347+1.75198401*b+a*(-2.13704948-10.02301043*b+a*(-4.24894561+5.38770819*b+4.69891013*a))));
+  const midT=0.11239642+1/(1.6132032-0.68124379*b+a*(0.40370612+0.90148123*b+a*(-0.27087943+0.6122399*b+a*(0.00299215-0.45399568*b-0.14661872*a))));
+  const cMid=0.9*k*Math.sqrt(Math.sqrt(1/(1/(L*midS)**4+1/((1-L)*midT)**4)));
+  const c0=Math.sqrt(1/(1/(L*0.4)**2+1/((1-L)*0.8)**2));
+  return [c0,cMid,cMax];
+}
+function okhslToRgb(h,s,l){
+  const L=okhslToOklabLightness(l);
+  let lab=[L,0,0];
+  if(L>0 && L<1 && s>0){
+    const angle=(2*Math.PI*(((h%360)+360)%360))/360;
+    const a=Math.cos(angle), b=Math.sin(angle);
+    const [c0,cMid,cMax]=chromaStops(L,a,b);
+    let chroma;
+    if(s<0.8){
+      const t=1.25*s;
+      const k1=0.8*c0;
+      chroma=(t*k1)/(1-(1-k1/cMid)*t);
+    } else {
+      const t=5*(s-0.8);
+      const k1=(0.2*cMid**2*1.25**2)/c0;
+      chroma=cMid+(t*k1)/(1-(1-k1/(cMax-cMid))*t);
+    }
+    lab=[L,chroma*a,chroma*b];
+  }
+  return linearSrgbToRgb(oklabToLinearSrgb(lab));
+}
+function rgbToHex(r,g,b){ return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function hexNormalize(v){
+  v=v.trim();
+  if(/^#[0-9a-f]{3}$/i.test(v)){ v='#'+v[1]+v[1]+v[2]+v[2]+v[3]+v[3]; }
+  if(/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+  return null;
+}
+function parseRgbStr(v){
+  const m=v.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if(!m) return null;
+  return rgbToHex(+m[1],+m[2],+m[3]);
+}
+function okhslToHex(v){
+  const m=v.match(/okhsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/i);
+  if(!m) return null;
+  const {r,g,b}=okhslToRgb(parseFloat(m[1]),parseFloat(m[2])/100,parseFloat(m[3])/100);
+  return rgbToHex(r,g,b);
+}
+function cssColorToHex(v){
+  try {
+    const el=document.createElement('span');
+    el.style.color=v;
+    document.body.appendChild(el);
+    const computed=getComputedStyle(el).color;
+    document.body.removeChild(el);
+    const m=computed.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if(m) return rgbToHex(+m[1],+m[2],+m[3]);
+  } catch(e){}
+  return null;
+}
+function getVars(){
+  const vars={};
+  document.querySelectorAll('.var-row').forEach(row=>{
+    const name=row.querySelector('.var-name').value.trim();
+    const val=row.querySelector('.var-value').value.trim();
+    if(name) vars[name]=val;
+  });
+  return vars;
+}
+function toHex(value, vars, depth=0){
+  if(typeof value!=='string') return null;
+  value=value.trim();
+  if(!value) return null;
+  if(vars && value in vars && depth<8) return toHex(vars[value], vars, depth+1);
+  let h=hexNormalize(value); if(h) return h;
+  h=parseRgbStr(value); if(h) return h;
+  h=okhslToHex(value); if(h) return h;
+  h=cssColorToHex(value); if(h) return h;
+  return null;
+}
+function syncColorPickers(){
+  const vars=getVars();
+  document.querySelectorAll('.color-row').forEach(row=>{
+    const text=row.querySelector('.color-value');
+    const picker=row.querySelector('.color-picker');
+    const h=toHex(text.value, vars);
+    if(h) picker.value=h;
+  });
+  document.querySelectorAll('.var-row').forEach(row=>{
+    const text=row.querySelector('.var-value');
+    const picker=row.querySelector('.var-picker');
+    const h=toHex(text.value, getVars());
+    if(h) picker.value=h;
+  });
+}
 
 async function api(path, opts){ const r = await fetch(path, opts); const d = await r.json(); if(!r.ok) throw new Error(d.error || JSON.stringify(d)); return d; }
 
@@ -74,27 +248,123 @@ async function loadList(){
   $('status').className = 'status ok';
 }
 
+function makeVarRow(name='', value=''){
+  const row=document.createElement('div'); row.className='var-row';
+  const nameInput=document.createElement('input'); nameInput.className='var-name'; nameInput.value=name; nameInput.placeholder='name';
+  const valInput=document.createElement('input'); valInput.className='var-value'; valInput.value=value; valInput.placeholder='color value';
+  const picker=document.createElement('input'); picker.type='color'; picker.className='var-picker';
+  const h=toHex(value,getVars()); if(h) picker.value=h;
+  const del=document.createElement('button'); del.className='secondary'; del.textContent='×'; del.onclick=()=>{ row.remove(); syncColorPickers(); updatePreview(); };
+  valInput.addEventListener('input', ()=>{ const hh=toHex(valInput.value,getVars()); if(hh) picker.value=hh; syncColorPickers(); updatePreview(); });
+  picker.addEventListener('input', ()=>{ valInput.value=picker.value; syncColorPickers(); updatePreview(); });
+  nameInput.addEventListener('input', ()=>{ syncColorPickers(); updatePreview(); });
+  row.appendChild(nameInput); row.appendChild(valInput); row.appendChild(picker); row.appendChild(del);
+  return row;
+}
+
+function makeColorRow(token, value=''){
+  const row=document.createElement('div'); row.className='color-row';
+  const lab=document.createElement('label'); lab.textContent=token; lab.style.margin='0';
+  const valInput=document.createElement('input'); valInput.className='color-value'; valInput.value=value; valInput.placeholder='value';
+  const picker=document.createElement('input'); picker.type='color'; picker.className='color-picker';
+  const vars=getVars(); const h=toHex(value,vars); if(h) picker.value=h;
+  valInput.addEventListener('input', ()=>{ const hh=toHex(valInput.value,getVars()); if(hh) picker.value=hh; updatePreview(); });
+  picker.addEventListener('input', ()=>{ valInput.value=picker.value; updatePreview(); });
+  row.appendChild(lab); row.appendChild(valInput); row.appendChild(picker);
+  return row;
+}
+
+function makeExportRow(token, value=''){
+  const row=document.createElement('div'); row.className='color-row';
+  const lab=document.createElement('label'); lab.textContent=token; lab.style.margin='0';
+  const valInput=document.createElement('input'); valInput.className='export-value'; valInput.dataset.token=token; valInput.value=value;
+  const picker=document.createElement('input'); picker.type='color'; picker.className='export-picker';
+  const h=toHex(value,getVars()); if(h) picker.value=h;
+  valInput.addEventListener('input', ()=>{ const hh=toHex(valInput.value,getVars()); if(hh) picker.value=hh; updatePreview(); });
+  picker.addEventListener('input', ()=>{ valInput.value=picker.value; updatePreview(); });
+  row.appendChild(lab); row.appendChild(valInput); row.appendChild(picker);
+  return row;
+}
+
+function renderForm(t){
+  theme=t;
+  $('nameInput').value = t.name || current || '';
+  $('appearanceSelect').value = t.appearance || 'dark';
+
+  const varsContainer=$('varsContainer'); varsContainer.innerHTML='';
+  const vars=t.vars || {};
+  for(const [k,v] of Object.entries(vars)) varsContainer.appendChild(makeVarRow(k,v));
+  if(Object.keys(vars).length===0) varsContainer.appendChild(makeVarRow());
+
+  const colorsContainer=$('colorsContainer'); colorsContainer.innerHTML='';
+  const colors=t.colors || {};
+  for(const token of COLOR_TOKENS){
+    colorsContainer.appendChild(makeColorRow(token, colors[token]));
+  }
+
+  const exportContainer=$('exportContainer'); exportContainer.innerHTML='';
+  const exp=t.export || {};
+  for(const token of EXPORT_TOKENS){
+    exportContainer.appendChild(makeExportRow(token, exp[token]));
+  }
+  syncColorPickers();
+  updatePreview();
+}
+
+function collectTheme(){
+  const vars={};
+  document.querySelectorAll('.var-row').forEach(row=>{
+    const name=row.querySelector('.var-name').value.trim();
+    const val=row.querySelector('.var-value').value.trim();
+    if(name) vars[name]=val;
+  });
+  const colors={};
+  document.querySelectorAll('.color-row').forEach(row=>{
+    // color rows in colors container only; but export rows also .color-row. Distinguish by presence of .color-value
+    const valInput=row.querySelector('.color-value');
+    if(!valInput) return;
+    const label=row.querySelector('label').textContent.trim();
+    const val=valInput.value.trim();
+    if(val) colors[label]=val;
+  });
+  const exportObj={};
+  document.querySelectorAll('.export-value').forEach(inp=>{
+    const val=inp.value.trim();
+    if(val) exportObj[inp.dataset.token]=val;
+  });
+  const t={
+    $schema: theme?.$schema || 'https://pi.dev/schemas/theme.schema.json',
+    name: $('nameInput').value.trim(),
+    appearance: $('appearanceSelect').value,
+    vars,
+    colors,
+  };
+  if(Object.keys(exportObj).length) t.export=exportObj;
+  return t;
+}
+
+function updatePreview(){
+  const t=collectTheme();
+  const colors=t.colors||{};
+  const vars=t.vars||{};
+  const preview=$('preview'); preview.innerHTML='';
+  const keys=['accent','success','error','warning','text','muted','userMessageBg','toolSuccessBg','toolErrorBg'];
+  for(const k of keys){
+    const v=colors[k];
+    const div=document.createElement('div'); div.className='swatch';
+    const chip=document.createElement('div'); chip.className='chip';
+    const h=toHex(v, vars);
+    chip.style.background = h || '#333';
+    div.appendChild(chip);
+    const label=document.createElement('div'); label.textContent=k; div.appendChild(label);
+    preview.appendChild(div);
+  }
+}
+
 async function loadTheme(name){
   const d = await api('/api/theme?name='+encodeURIComponent(name));
   current = name;
-  $('editor').value = JSON.stringify(d.theme, null, 2);
-  renderPreview(d.theme);
-}
-
-function renderPreview(theme){
-  const colors = theme?.colors || {};
-  const preview = $('preview'); preview.innerHTML = '';
-  const keys = ['accent','success','error','warning','text','muted','userMessageBg','toolSuccessBg','toolErrorBg'];
-  for (const k of keys){
-    const v = colors[k];
-    const div = document.createElement('div'); div.className='swatch';
-    const chip = document.createElement('div'); chip.className='chip';
-    if (typeof v === 'string' && v.startsWith('#')) chip.style.background = v;
-    else chip.style.background = '#333';
-    div.appendChild(chip);
-    const label = document.createElement('div'); label.textContent = k; div.appendChild(label);
-    preview.appendChild(div);
-  }
+  renderForm(d.theme);
 }
 
 $('loadBtn').onclick = () => { const n = $('themeSelect').value; if(n) loadTheme(n); };
@@ -103,26 +373,28 @@ $('newBtn').onclick = async () => {
   if(!name){ $('msg').textContent='enter a name'; $('msg').className='status err'; return; }
   const base = await api('/api/theme?name=dark');
   const t = base.theme; t.name = name;
-  $('editor').value = JSON.stringify(t, null, 2);
   current = name;
-  renderPreview(t);
+  renderForm(t);
   $('msg').textContent = 'draft created; edit then Save'; $('msg').className='status ok';
 };
-
+$('addVarBtn').onclick = () => {
+  $('varsContainer').appendChild(makeVarRow());
+};
 $('saveBtn').onclick = async () => {
-  let theme; try { theme = JSON.parse($('editor').value); } catch(e){ $('msg').textContent='invalid JSON'; $('msg').className='status err'; return; }
-  const name = current || theme.name;
+  const themeObj=collectTheme();
+  const name = themeObj.name;
   if(!name){ $('msg').textContent='missing name'; $('msg').className='status err'; return; }
-  theme.name = name;
+  current = name;
+  themeObj.name = name;
   try {
-    await api('/api/theme', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, theme }) });
+    await api('/api/theme', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, theme: themeObj }) });
     $('msg').textContent = 'saved '+name; $('msg').className='status ok';
     await loadList();
+    const sel=$('themeSelect'); sel.value=name;
   } catch(e){ $('msg').textContent = e.message; $('msg').className='status err'; }
 };
 
-loadList().then(() => { if(themes.includes('dark')) loadTheme('dark'); });
+loadList().then(() => { if(themes.includes('dark')) loadTheme('dark'); else if(themes.length) loadTheme(themes[0]); });
 </script>
 </body>
 </html>
-EOF
