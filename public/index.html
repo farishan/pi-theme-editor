@@ -48,6 +48,17 @@
   .pi-preview .pp-footer { padding:.5rem .75rem; border-top:1px solid var(--pp-borderMuted,#333); background:var(--pp-cardBg,#14181d); }
   .pi-preview .pp-input { background:var(--pp-pageBg,#0b0d10); border:1px solid var(--pp-border,#4b5563); border-radius:6px; padding:.4rem .6rem; color:var(--pp-text,#e6e6e6); }
   .pi-preview .pp-status { color:var(--pp-muted,#aaa); font-size:.75rem; margin-top:.25rem; }
+  .pi-preview .pp-body { scrollbar-color: var(--pp-scrollbarThumb,#6b7280) var(--pp-scrollbarTrack,#1f2937); }
+  .pi-preview .pp-selected { background:var(--pp-selectedBg,#1e293b); padding:.35rem .5rem; border-radius:4px; margin:.35rem 0; }
+  .pi-preview .pp-search { background:var(--pp-searchMatchBg,#1f2937); color:var(--pp-searchMatchText,#e6e6e6); padding:0 .2rem; border-radius:3px; }
+  .pi-preview .pp-badges { display:flex; gap:.4rem; flex-wrap:wrap; margin:.35rem 0; }
+  .pi-preview .pp-badge { padding:.15rem .4rem; border-radius:4px; font-size:.75rem; border:1px solid var(--pp-borderMuted,#333); }
+  .pi-preview .pp-badge.ok { background:var(--pp-toolSuccessBg,#1f3b2f); color:var(--pp-success,#4ade80); }
+  .pi-preview .pp-badge.warn { background:var(--pp-toolPendingBg,#1f2937); color:var(--pp-warning,#fbbf24); }
+  .pi-preview .pp-badge.err { background:var(--pp-toolErrorBg,#3b1f1f); color:var(--pp-error,#f87171); }
+  .pi-preview .pp-hr { border:0; border-top:1px solid var(--pp-mdHr,#4b5563); margin:.5rem 0; }
+  .pi-preview .pp-accent-text { color:var(--pp-accent,#a78bfa); }
+  .pi-preview .pp-dim-text { color:var(--pp-dim,#6b7280); }
 </style>
 </head>
 <body>
@@ -378,11 +389,20 @@ function ensurePiPreviewMarkup(){
       <div class="pp-user">explain the auth flow</div>
       <div class="pp-assistant">
         <h4>Assistant</h4>
-        <p>Here is a <a href="#">link</a> and <code>inline code</code>.</p>
+        <p>Here is a <a href="#">link</a>, <code>inline code</code>, and a <span class="pp-search">search match</span>.</p>
         <blockquote>a quoted note</blockquote>
         <pre><code>const x = 42; // comment</code></pre>
         <ul><li>bullet one</li><li>bullet two</li></ul>
+        <hr class="pp-hr">
+        <div class="pp-badges">
+          <span class="pp-badge ok">success</span>
+          <span class="pp-badge warn">warning</span>
+          <span class="pp-badge err">error</span>
+          <span class="pp-accent-text">accent</span>
+          <span class="pp-dim-text">dim</span>
+        </div>
       </div>
+      <div class="pp-selected">selected item row</div>
       <div class="pp-tool">
         <div class="title">read_file src/auth.ts</div>
         <div class="out">export function login() { ... }</div>
@@ -437,6 +457,15 @@ function resolvePreviewColors(){
     '--pp-dim': C('dim','#6b7280'),
     '--pp-toolDiffAdded': C('toolDiffAdded','#4ade80'),
     '--pp-toolDiffRemoved': C('toolDiffRemoved','#f87171'),
+    '--pp-scrollbarTrack': C('scrollbarTrack','#1f2937'),
+    '--pp-scrollbarThumb': C('scrollbarThumb','#6b7280'),
+    '--pp-searchMatchBg': C('searchMatchBg','#1f2937'),
+    '--pp-searchMatchText': C('searchMatchText','#e6e6e6'),
+    '--pp-mdHr': C('mdHr','#4b5563'),
+    '--pp-accent': C('accent','#a78bfa'),
+    '--pp-warning': C('warning','#fbbf24'),
+    '--pp-error': C('error','#f87171'),
+    '--pp-success': C('success','#4ade80'),
   };
 }
 
