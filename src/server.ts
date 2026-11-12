@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 const PORT = Number(process.env.PI_THEME_EDITOR_PORT ?? 4317);
 const AGENT_DIR = process.env.PI_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 const THEMES_DIR = join(AGENT_DIR, "themes");
+const BUILTIN_THEMES_DIR = "/home/faris/.pi/agent/install/releases/1.5.2/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme";
 const PUBLIC_DIR = join(import.meta.dir, "..", "public");
 
 const REQUIRED_COLORS = [
@@ -65,8 +66,11 @@ async function listThemes(): Promise<string[]> {
 
 async function readTheme(name: string): Promise<any> {
   const safe = basename(name);
-  const raw = await readFile(join(THEMES_DIR, safe + ".json"), "utf8");
-  return JSON.parse(raw);
+  const candidates = [join(THEMES_DIR, safe + ".json"), join(BUILTIN_THEMES_DIR, safe + ".json")];
+  for (const c of candidates) {
+    try { const raw = await readFile(c, "utf8"); return JSON.parse(raw); } catch {}
+  }
+  throw new Error("theme not found: " + safe);
 }
 
 async function writeTheme(name: string, theme: any): Promise<void> {
