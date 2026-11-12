@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi Theme Editor</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #0b0d10; color: #e6e6e6; }
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid #222; display:flex; justify-content:space-between; align-items:center; }
+  main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; display:grid; grid-template-columns: 320px 1fr; gap:1rem; }
+  .card { background: #14181d; border: 1px solid #222; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  label { display:block; margin:.5rem 0 .25rem; font-size:.9rem; color:#aaa; }
+  input, select, textarea { width:100%; box-sizing:border-box; background:#0b0d10; color:#e6e6e6; border:1px solid #333; padding:.4rem; border-radius:6px; font-family: ui-monospace, monospace; }
+  textarea { min-height: 420px; }
+  button { background:#2563eb; color:#fff; border:0; padding:.45rem .9rem; border-radius:6px; cursor:pointer; }
+  button.secondary { background:#333; }
+  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  .status { font-size:.9rem; }
+  .ok { color:#4ade80; } .err { color:#f87171; }
+  h2 { margin-top:0; font-size:1.1rem; }
+  .swatches { display:grid; grid-template-columns: repeat(auto-fill,minmax(90px,1fr)); gap:.5rem; margin-top:.5rem; }
+  .swatch { border:1px solid #333; border-radius:6px; padding:.4rem; font-size:.75rem; }
+  .chip { display:inline-block; width:100%; height:24px; border-radius:4px; margin-bottom:.25rem; border:1px solid #444; }
+</style>
+</head>
+<body>
+<header>
+  <div><strong>Pi Theme Editor</strong> — local web editor</div>
+  <div id="status" class="status">connecting…</div>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>Themes</h2>
+      <select id="themeSelect"></select>
+      <div class="row" style="margin-top:.5rem">
+        <button id="loadBtn">Load</button>
+        <button id="newBtn" class="secondary">New from dark</button>
+      </div>
+      <label>New theme name</label>
+      <input id="newName" placeholder="my-theme">
+    </div>
+    <div class="card">
+      <h2>Preview (approx)</h2>
+      <div id="preview" class="swatches"></div>
+    </div>
+  </section>
+  <section>
+    <div class="card">
+      <h2>JSON</h2>
+      <textarea id="editor" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:.5rem">
+        <button id="saveBtn">Save</button>
+        <span id="msg" class="status"></span>
+      </div>
+      <p style="color:#888;font-size:.85rem">Saves to <code id="dir"></code>. Pi hot-reloads only the active theme; select it in Pi to preview live.</p>
+    </div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let themes = [];
+let current = null;
+
+async function api(path, opts){ const r = await fetch(path, opts); const d = await r.json(); if(!r.ok) throw new Error(d.error || JSON.stringify(d)); return d; }
+
+async function loadList(){
+  const d = await api('/api/themes');
+  themes = d.themes; $('dir').textContent = d.dir;
+  const sel = $('themeSelect'); sel.innerHTML = '';
+  for (const t of themes){ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); }
+  $('status').textContent = `connected · ${themes.length} themes`;
+  $('status').className = 'status ok';
+}
+
+async function loadTheme(name){
+  const d = await api('/api/theme?name='+encodeURIComponent(name));
+  current = name;
+  $('editor').value = JSON.stringify(d.theme, null, 2);
+  renderPreview(d.theme);
+}
+
+function renderPreview(theme){
+  const colors = theme?.colors || {};
+  const preview = $('preview'); preview.innerHTML = '';
+  const keys = ['accent','success','error','warning','text','muted','userMessageBg','toolSuccessBg','toolErrorBg'];
+  for (const k of keys){
+    const v = colors[k];
+    const div = document.createElement('div'); div.className='swatch';
+    const chip = document.createElement('div'); chip.className='chip';
+    if (typeof v === 'string' && v.startsWith('#')) chip.style.background = v;
+    else chip.style.background = '#333';
+    div.appendChild(chip);
+    const label = document.createElement('div'); label.textContent = k; div.appendChild(label);
+    preview.appendChild(div);
+  }
+}
+
+$('loadBtn').onclick = () => { const n = $('themeSelect').value; if(n) loadTheme(n); };
+$('newBtn').onclick = async () => {
+  const name = $('newName').value.trim();
+  if(!name){ $('msg').textContent='enter a name'; $('msg').className='status err'; return; }
+  const base = await api('/api/theme?name=dark');
+  const t = base.theme; t.name = name;
+  $('editor').value = JSON.stringify(t, null, 2);
+  current = name;
+  renderPreview(t);
+  $('msg').textContent = 'draft created; edit then Save'; $('msg').className='status ok';
+};
+
+$('saveBtn').onclick = async () => {
+  let theme; try { theme = JSON.parse($('editor').value); } catch(e){ $('msg').textContent='invalid JSON'; $('msg').className='status err'; return; }
+  const name = current || theme.name;
+  if(!name){ $('msg').textContent='missing name'; $('msg').className='status err'; return; }
+  theme.name = name;
+  try {
+    await api('/api/theme', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, theme }) });
+    $('msg').textContent = 'saved '+name; $('msg').className='status ok';
+    await loadList();
+  } catch(e){ $('msg').textContent = e.message; $('msg').className='status err'; }
+};
+
+loadList().then(() => { if(themes.includes('dark')) loadTheme('dark'); });
+</script>
+</body>
+</html>
+EOF

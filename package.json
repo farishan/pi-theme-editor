@@ -1,0 +1,13 @@
+{
+  "name": "pi-theme-editor",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Local web editor for Pi coding agent themes (JSON + schema validation).",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "check": "bun run src/server.ts --help 2>/dev/null || true"
+  },
+  "license": "MIT"
+}
