@@ -39,3 +39,10 @@ The system SHALL map additional theme color tokens to preview CSS variables, inc
 #### Scenario: Token changes reflected
 - **WHEN** one of the additional tokens changes
 - **THEN** the corresponding preview region updates
+
+### Requirement: Terminal-style preview presentation
+The system SHALL present the preview as a monospace terminal-like interface rather than generic cards.
+
+#### Scenario: Terminal appearance
+- **WHEN** a theme is loaded
+- **THEN** the preview uses monospace layout and terminal-style regions
