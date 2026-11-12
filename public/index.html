@@ -265,9 +265,10 @@ function syncColorPickers(){
   const vars=getVars();
   document.querySelectorAll('.color-row').forEach(row=>{
     const text=row.querySelector('.color-value');
+    if(!text) return;
     const picker=row.querySelector('.color-picker');
     const h=toHex(text.value, vars);
-    if(h) picker.value=h;
+    if(h && picker) picker.value=h;
   });
   document.querySelectorAll('.var-row').forEach(row=>{
     const text=row.querySelector('.var-value');
