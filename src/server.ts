@@ -36,7 +36,7 @@ async function staticFile(pathname: string): Promise<Response | null> {
   try {
     const body = await readFile(full);
     const mime: Record<string,string> = { ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".css":"text/css; charset=utf-8", ".json":"application/json; charset=utf-8" };
-    return new Response(body, { headers: { "content-type": mime[full.slice(full.lastIndexOf("."))] ?? "application/octet-stream" } });
+    return new Response(body, { headers: { "content-type": mime[full.slice(full.lastIndexOf("."))] ?? "application/octet-stream", "cache-control": "no-store" } });
   } catch {
     return null;
   }
